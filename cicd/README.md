@@ -13,6 +13,8 @@ For a service, on each push: build, test with coverage, SonarQube quality gate, 
 3. Create one pipeline job per service (`catalog`, `orders`, `notifications`), each pointing at this repo with `cicd/Jenkinsfile` as the script path, and set the `SERVICE` parameter.
 4. The storefront uses a simpler npm-and-docker build; add a small separate job for it if you want it automated.
 
+## Test cicd
+
 ## One-command local stack
 
 From repo root:

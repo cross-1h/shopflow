@@ -37,6 +37,13 @@ pipeline {
     stages {
         stage('Checkout') { steps { checkout scm } }
 
+        stage('Resolve Service') {
+            steps {
+                sh 'echo "SERVICE=${SERVICE}"'
+                sh 'echo "SERVICE_DIR=${SERVICE_DIR}"'
+            }
+        }
+
         stage('Build') { steps { dir("${SERVICE_DIR}") { sh 'mvn -B -ntp clean compile' } } }
 
         stage('Test + Coverage') {

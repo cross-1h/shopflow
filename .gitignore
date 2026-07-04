@@ -1,0 +1,13 @@
+# Local secrets and generated deployment files
+k8s/db-secret.yaml
+
+# Terraform local state and artifacts
+infra/.terraform/
+infra/.terraform.lock.hcl
+infra/terraform.tfstate
+infra/terraform.tfstate.backup
+
+# Local shell/script artifacts
+*.log
+/tmp/alb-trust-policy.json
+manage-shopflow.sh

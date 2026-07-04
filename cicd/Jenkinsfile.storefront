@@ -1,0 +1,84 @@
+// Optional storefront pipeline (npm + Docker + ECR + Helm deploy)
+//
+// Create a Jenkins pipeline job with script path: cicd/Jenkinsfile.storefront
+
+pipeline {
+    agent any
+
+    triggers {
+        githubPush()
+    }
+
+    environment {
+        AWS_REGION   = 'us-east-1'
+        ECR_ACCOUNT  = '922685583704'
+        EKS_CLUSTER  = 'shopflow'
+
+        IMAGE_REPO   = 'shopflow-storefront'
+        IMAGE_TAG    = "${BUILD_NUMBER}"
+        ECR_REGISTRY = "${ECR_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        IMAGE        = "${ECR_REGISTRY}/${IMAGE_REPO}"
+
+        AWS_CREDS    = credentials('aws-ecr')
+    }
+
+    stages {
+        stage('Checkout') { steps { checkout scm } }
+
+        stage('Install + Build') {
+            steps {
+                dir('storefront') {
+                    sh 'npm ci'
+                    sh 'npm run build'
+                }
+            }
+        }
+
+        stage('Docker Build') {
+            steps {
+                dir('storefront') {
+                    sh 'docker build -t ${IMAGE}:${IMAGE_TAG} -t ${IMAGE}:latest .'
+                }
+            }
+        }
+
+        stage('Image Scan (Trivy)') {
+            steps {
+                sh 'trivy image --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress ${IMAGE}:${IMAGE_TAG}'
+            }
+        }
+
+        stage('Push to ECR') {
+            steps {
+                sh '''
+                    export AWS_ACCESS_KEY_ID=$AWS_CREDS_USR
+                    export AWS_SECRET_ACCESS_KEY=$AWS_CREDS_PSW
+                    aws ecr describe-repositories --region ${AWS_REGION} --repository-names ${IMAGE_REPO} \
+                      || aws ecr create-repository --region ${AWS_REGION} --repository-name ${IMAGE_REPO}
+                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                    docker push ${IMAGE}:${IMAGE_TAG}
+                    docker push ${IMAGE}:latest
+                '''
+            }
+        }
+
+        stage('Deploy with Helm') {
+            steps {
+                sh '''
+                    export AWS_ACCESS_KEY_ID=$AWS_CREDS_USR
+                    export AWS_SECRET_ACCESS_KEY=$AWS_CREDS_PSW
+                    aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER}
+                    helm upgrade --install shopflow helm/shopflow \
+                      --reuse-values \
+                      --set image.tags.storefront=${IMAGE_TAG}
+                    kubectl rollout status deployment/storefront --timeout=180s
+                '''
+            }
+        }
+    }
+
+    post {
+        success { echo "Deployed ${IMAGE}:${IMAGE_TAG} to ${EKS_CLUSTER}." }
+        failure { echo 'A stage or gate failed. Read the first red error above.' }
+    }
+}

@@ -28,7 +28,13 @@ pipeline {
         stage('Install + Build') {
             steps {
                 dir('storefront') {
-                    sh 'npm ci'
+                                        sh '''
+                                                if [ -f package-lock.json ]; then
+                                                    npm ci
+                                                else
+                                                    npm install
+                                                fi
+                                        '''
                     sh 'npm run build'
                 }
             }

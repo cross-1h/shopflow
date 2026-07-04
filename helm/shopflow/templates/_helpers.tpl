@@ -6,5 +6,5 @@ app.kubernetes.io/managed-by: helm
 
 {{/* Build a full image reference for a service repo */}}
 {{- define "shopflow.image" -}}
-{{- printf "%s/%s:%s" .registry .repo .tag -}}
+{{- printf "%s/%s:%v" .registry .repo .tag -}}
 {{- end -}}

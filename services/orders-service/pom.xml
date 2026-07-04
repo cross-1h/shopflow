@@ -20,7 +20,8 @@
     <java.version>17</java.version>
     <tomcat.version>10.1.55</tomcat.version>
     <postgresql.version>42.7.11</postgresql.version>
-    <jackson.version>2.21.4</jackson.version>
+    <jackson-bom.version>2.21.4</jackson-bom.version>
+    <netty.version>4.1.135.Final</netty.version>
     <spring-cloud-aws.version>3.1.1</spring-cloud-aws.version>
   </properties>
 

@@ -80,12 +80,14 @@ pipeline {
             steps {
                 dir("${SERVICE_DIR}") {
                     sh '''
+                        export NEXUS_USERNAME=${NEXUS_CREDS_USR}
+                        export NEXUS_PASSWORD=${NEXUS_CREDS_PSW}
                         mvn -B -ntp deploy:deploy-file \
+                          -s ../../cicd/settings-nexus.xml \
                           -Durl=${NEXUS_URL} \
                           -DrepositoryId=nexus \
                           -Dfile=target/app.jar \
-                          -DgroupId=com.shopflow -DartifactId=${SERVICE}-service -Dversion=1.0.${BUILD_NUMBER} -Dpackaging=jar \
-                          -Dusername=${NEXUS_CREDS_USR} -Dpassword=${NEXUS_CREDS_PSW}
+                          -DgroupId=com.shopflow -DartifactId=${SERVICE}-service -Dversion=1.0.${BUILD_NUMBER} -Dpackaging=jar
                     '''
                 }
             }

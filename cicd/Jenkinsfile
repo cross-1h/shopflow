@@ -55,6 +55,7 @@ pipeline {
                         mvn -B -ntp sonar:sonar \
                           -Dsonar.host.url=${SONAR_HOST} \
                           -Dsonar.token=${SONAR_TOKEN} \
+                                                    -Dsonar.login=${SONAR_TOKEN} \
                           -Dsonar.projectKey=shopflow-${SERVICE} \
                           -Dsonar.qualitygate.wait=true
                     '''

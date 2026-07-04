@@ -13,6 +13,42 @@ For a service, on each push: build, test with coverage, SonarQube quality gate, 
 3. Create one pipeline job per service (`catalog`, `orders`, `notifications`), each pointing at this repo with `cicd/Jenkinsfile` as the script path, and set the `SERVICE` parameter.
 4. The storefront uses a simpler npm-and-docker build; add a small separate job for it if you want it automated.
 
+## One-command local stack
+
+From repo root:
+
+```bash
+bash cicd/jenkins/up.sh
+```
+
+This starts Jenkins, SonarQube, Nexus, and Sonar's Postgres DB from:
+
+- `cicd/jenkins/docker-compose.yml`
+- `cicd/jenkins/Dockerfile`
+
+Endpoints:
+
+- Jenkins: `http://localhost:8080`
+- SonarQube: `http://localhost:9000`
+- Nexus: `http://localhost:8081`
+
+To stop:
+
+```bash
+docker compose -f cicd/jenkins/docker-compose.yml down
+```
+
+## Jenkins job wiring for this repo
+
+- Backend services job script path: `cicd/Jenkinsfile`
+- Storefront job script path: `cicd/Jenkinsfile.storefront`
+
+Create Jenkins credentials with IDs:
+
+- `aws-ecr` (AWS access key and secret)
+- `sonar-token` (secret text token)
+- `nexus` (username and password)
+
 ## The artifact store
 
 The `Publish artifact to Nexus` stage uploads the built jar to Nexus. That gives you a versioned history of every build output, separate from the runtime images in ECR. `settings-nexus.xml` documents the server id the deploy step uses.

@@ -220,4 +220,3 @@ If `terraform destroy` complains that the VPC is in use, the load balancer from 
 ## A note from your instructor
 
 This is a large, real codebase. It was written to be correct and to teach, but you are the one who runs it, and the first run of any distributed system on AWS rarely goes perfectly. Treat the errors as the lesson: read the logs, fix one thing, try again. That debugging is exactly the work you will describe to a hiring manager. Keep a short log of the problems you solved; those become your interview stories.
-# project-6-shopflow-phase1

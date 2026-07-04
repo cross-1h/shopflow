@@ -1,0 +1,73 @@
+# Local CI/CD stack for ShopFlow.
+# Starts Jenkins, SonarQube, Nexus, and Sonar's Postgres DB.
+
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: shopflow-jenkins
+    restart: unless-stopped
+    user: root
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    volumes:
+      - jenkins-data:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - cicd
+
+  sonarqube:
+    image: sonarqube:community
+    container_name: shopflow-sonarqube
+    restart: unless-stopped
+    depends_on:
+      - sonar-db
+    environment:
+      SONAR_JDBC_URL: jdbc:postgresql://sonar-db:5432/sonar
+      SONAR_JDBC_USERNAME: sonar
+      SONAR_JDBC_PASSWORD: sonar
+    ports:
+      - "9000:9000"
+    volumes:
+      - sonarqube-data:/opt/sonarqube/data
+      - sonarqube-extensions:/opt/sonarqube/extensions
+      - sonarqube-logs:/opt/sonarqube/logs
+    networks:
+      - cicd
+
+  sonar-db:
+    image: postgres:15
+    container_name: shopflow-sonar-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sonar
+      POSTGRES_PASSWORD: sonar
+      POSTGRES_DB: sonar
+    volumes:
+      - sonar-db-data:/var/lib/postgresql/data
+    networks:
+      - cicd
+
+  nexus:
+    image: sonatype/nexus3:latest
+    container_name: shopflow-nexus
+    restart: unless-stopped
+    ports:
+      - "8081:8081"
+    volumes:
+      - nexus-data:/nexus-data
+    networks:
+      - cicd
+
+networks:
+  cicd:
+
+volumes:
+  jenkins-data:
+  sonarqube-data:
+  sonarqube-extensions:
+  sonarqube-logs:
+  sonar-db-data:
+  nexus-data:

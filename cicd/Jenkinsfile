@@ -20,7 +20,7 @@ pipeline {
         AWS_REGION   = 'us-east-1'
         ECR_ACCOUNT  = '922685583704'
         EKS_CLUSTER  = 'shopflow'
-        NEXUS_URL    = 'http://nexus:8081/repository/maven-releases/'
+        NEXUS_URL    = 'http://52.91.82.26:8081/repository/maven-releases/'
 
         SERVICE_DIR  = "services/${params.SERVICE}-service"
         IMAGE_REPO   = "shopflow-${params.SERVICE}"

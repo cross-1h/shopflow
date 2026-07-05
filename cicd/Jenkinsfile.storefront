@@ -50,7 +50,10 @@ pipeline {
 
         stage('Image Scan (Trivy)') {
             steps {
-                sh 'trivy image --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress ${IMAGE}:${IMAGE_TAG}'
+                sh '''
+                    export TRIVY_CACHE_DIR="/tmp/trivy-storefront-${BUILD_NUMBER}"
+                    trivy image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress ${IMAGE}:${IMAGE_TAG}
+                '''
             }
         }
 

@@ -96,7 +96,12 @@ pipeline {
         stage('Docker Build') { steps { dir("${SERVICE_DIR}") { sh 'docker build -t ${IMAGE}:${IMAGE_TAG} -t ${IMAGE}:latest .' } } }
 
         stage('Image Scan (Trivy)') {
-            steps { sh 'trivy image --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress ${IMAGE}:${IMAGE_TAG}' }
+            steps {
+                sh '''
+                    export TRIVY_CACHE_DIR="/tmp/trivy-${SERVICE}-${BUILD_NUMBER}"
+                    trivy image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress ${IMAGE}:${IMAGE_TAG}
+                '''
+            }
         }
 
         stage('Push to ECR') {

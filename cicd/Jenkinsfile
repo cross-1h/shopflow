@@ -62,11 +62,11 @@ pipeline {
             steps {
                 dir("${SERVICE_DIR}") {
                     sh '''
-                                                SONAR_URL="${SONAR_HOST:-http://sonarqube:9000}"
-                                                echo "Using SonarQube URL: ${SONAR_URL}"
-                        mvn -B -ntp sonar:sonar \
-                                                    -Dsonar.host.url=${SONAR_URL} \
-                          -Dsonar.login=${SONAR_TOKEN} \
+                        SONAR_URL="${SONAR_HOST:-http://sonarqube:9000}"
+                        echo "Using SonarQube URL: ${SONAR_URL}"
+                        mvn -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar \
+                          -Dsonar.host.url=${SONAR_URL} \
+                          -Dsonar.token=${SONAR_TOKEN} \
                           -Dsonar.projectKey=shopflow-${SERVICE} \
                           -Dsonar.qualitygate.wait=true
                     '''

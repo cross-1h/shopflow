@@ -45,7 +45,7 @@ docker compose -f cicd/jenkins/docker-compose.yml down
 - Backend services job script path: `cicd/Jenkinsfile`
 - Storefront job script path: `cicd/Jenkinsfile.storefront`
 
-Create Jenkins credentials with IDs:
+Create Jenkins credentials with IDs::
 
 - `aws-ecr` (AWS access key and secret)
 - `sonar-token` (secret text token)

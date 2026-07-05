@@ -32,6 +32,8 @@ pipeline {
         SONAR_HOST   = "${params.SONAR_HOST ?: 'http://100.51.104.230:9000'}"
         NEXUS_URL    = "${params.NEXUS_URL ?: 'http://100.51.104.230:8081/repository/maven-releases/'}"
 
+        TRIVY_CACHE_DIR = '/var/jenkins_home/.cache/trivy/global'
+
         AWS_CREDS    = credentials('aws-ecr')
         SONAR_TOKEN  = credentials('sonar-token')
         NEXUS_CREDS  = credentials('nexus')
@@ -55,15 +57,16 @@ pipeline {
                     rm -rf /tmp/sonar-status.json
                     rm -rf /tmp/trivy-${SERVICE}-${BUILD_NUMBER} /tmp/trivy-cache-${SERVICE}-${BUILD_NUMBER}
 
-                    # Keep Trivy DB in a shared cache to avoid repeated full downloads.
-                    mkdir -p /var/jenkins_home/.cache/trivy/${SERVICE}
+                    # Keep one shared Trivy cache for all services to avoid duplicate DB copies.
+                    mkdir -p ${TRIVY_CACHE_DIR}
 
-                    # Run aggressive cleanup only when free space on /tmp is low.
-                    FREE_KB=$(df -Pk /tmp | awk 'NR==2 {print $4}')
-                    MIN_FREE_KB=3145728
+                    # Run aggressive cleanup when free space is low on the cache filesystem.
+                    FREE_KB=$(df -Pk /var/jenkins_home | awk 'NR==2 {print $4}')
+                    MIN_FREE_KB=6291456
                     if [ "${FREE_KB}" -lt "${MIN_FREE_KB}" ]; then
-                        echo "Low disk on /tmp detected (${FREE_KB} KB free). Running deep cleanup..."
+                        echo "Low disk on /var/jenkins_home detected (${FREE_KB} KB free). Running deep cleanup..."
                         rm -rf /tmp/trivy-* /tmp/sonar-* || true
+                        trivy clean --scan-cache || true
                         docker builder prune -af || true
                         docker image prune -af || true
                         docker container prune -f || true
@@ -135,8 +138,17 @@ pipeline {
             steps {
                 sh '''
                     rm -rf /tmp/trivy-${SERVICE}-${BUILD_NUMBER}
-                    mkdir -p /var/jenkins_home/.cache/trivy/${SERVICE}
-                    export TRIVY_CACHE_DIR="/var/jenkins_home/.cache/trivy/${SERVICE}"
+                    mkdir -p ${TRIVY_CACHE_DIR}
+
+                    FREE_KB=$(df -Pk /var/jenkins_home | awk 'NR==2 {print $4}')
+                    MIN_FREE_KB=5242880
+                    if [ "${FREE_KB}" -lt "${MIN_FREE_KB}" ]; then
+                        echo "Low disk before image scan (${FREE_KB} KB free). Pruning local Docker and scan cache..."
+                        trivy clean --scan-cache || true
+                        docker image prune -af || true
+                        docker builder prune -af || true
+                    fi
+
                     export TRIVY_SKIP_DB_UPDATE=false
                     trivy image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress --cache-dir ${TRIVY_CACHE_DIR} ${IMAGE}:${IMAGE_TAG}
                 '''

@@ -13,6 +13,7 @@ pipeline {
         AWS_REGION   = 'us-east-1'
         ECR_ACCOUNT  = '922685583704'
         EKS_CLUSTER  = 'shopflow'
+        TRIVY_CACHE_DIR = '/var/jenkins_home/.cache/trivy/global'
 
         IMAGE_REPO   = 'shopflow-storefront'
         IMAGE_TAG    = "${BUILD_NUMBER}"
@@ -31,13 +32,14 @@ pipeline {
                     set -e
                     rm -rf storefront/dist
                     rm -rf /tmp/trivy-storefront-${BUILD_NUMBER}
-                    mkdir -p /var/jenkins_home/.cache/trivy/storefront
+                    mkdir -p ${TRIVY_CACHE_DIR}
 
-                    FREE_KB=$(df -Pk /tmp | awk 'NR==2 {print $4}')
-                    MIN_FREE_KB=3145728
+                    FREE_KB=$(df -Pk /var/jenkins_home | awk 'NR==2 {print $4}')
+                    MIN_FREE_KB=6291456
                     if [ "${FREE_KB}" -lt "${MIN_FREE_KB}" ]; then
-                        echo "Low disk on /tmp detected (${FREE_KB} KB free). Running deep cleanup..."
+                        echo "Low disk on /var/jenkins_home detected (${FREE_KB} KB free). Running deep cleanup..."
                         rm -rf /tmp/trivy-* /tmp/sonar-* || true
+                        trivy clean --scan-cache || true
                         docker builder prune -af || true
                         docker image prune -af || true
                         docker container prune -f || true
@@ -75,8 +77,17 @@ pipeline {
             steps {
                 sh '''
                     rm -rf /tmp/trivy-storefront-${BUILD_NUMBER}
-                    mkdir -p /var/jenkins_home/.cache/trivy/storefront
-                    export TRIVY_CACHE_DIR="/var/jenkins_home/.cache/trivy/storefront"
+                    mkdir -p ${TRIVY_CACHE_DIR}
+
+                    FREE_KB=$(df -Pk /var/jenkins_home | awk 'NR==2 {print $4}')
+                    MIN_FREE_KB=5242880
+                    if [ "${FREE_KB}" -lt "${MIN_FREE_KB}" ]; then
+                        echo "Low disk before image scan (${FREE_KB} KB free). Pruning local Docker and scan cache..."
+                        trivy clean --scan-cache || true
+                        docker image prune -af || true
+                        docker builder prune -af || true
+                    fi
+
                     export TRIVY_SKIP_DB_UPDATE=false
                     trivy image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress --cache-dir ${TRIVY_CACHE_DIR} ${IMAGE}:${IMAGE_TAG}
                 '''

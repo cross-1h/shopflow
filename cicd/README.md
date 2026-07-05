@@ -4,7 +4,7 @@ In Phase 1 you built and deployed by hand. In Phase 2 every push goes through th
 
 ## What the pipeline does
 
-For a service, on each push: build, test with coverage, SonarQube quality gate, Trivy dependency scan, package, publish the jar to Nexus, build the image, Trivy image scan, push to ECR, and deploy with Helm. If any gate fails, nothing ships.
+For a service, on each push: build, test with coverage, SonarQube quality gate, Trivy dependency scan, package, publish the jar to Nexus, build the image, Trivy image scan, push to ECR, and deploy with Helm. If any gate fails, nothing ships..
 
 ## Setup
 

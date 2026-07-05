@@ -84,9 +84,12 @@ pipeline {
                     if [ "${FREE_KB}" -lt "${MIN_FREE_KB}" ]; then
                         echo "Low disk before image scan (${FREE_KB} KB free). Pruning local Docker and scan cache..."
                         trivy clean --scan-cache || true
-                        docker image prune -af || true
-                        docker builder prune -af || true
+                                                docker image prune -f || true
+                                                docker builder prune -f || true
                     fi
+
+                                        docker image inspect ${IMAGE}:${IMAGE_TAG} > /dev/null \
+                                            || { echo "Image ${IMAGE}:${IMAGE_TAG} is missing before Trivy scan"; exit 1; }
 
                     export TRIVY_SKIP_DB_UPDATE=false
                     trivy image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress --cache-dir ${TRIVY_CACHE_DIR} ${IMAGE}:${IMAGE_TAG}

@@ -54,7 +54,22 @@ pipeline {
                     rm -rf ${SERVICE_DIR}/target ${SERVICE_DIR}/.scannerwork
                     rm -rf /tmp/sonar-status.json
                     rm -rf /tmp/trivy-${SERVICE}-${BUILD_NUMBER} /tmp/trivy-cache-${SERVICE}-${BUILD_NUMBER}
-                    docker builder prune -f || true
+
+                    # Keep Trivy DB in a shared cache to avoid repeated full downloads.
+                    mkdir -p /var/jenkins_home/.cache/trivy/${SERVICE}
+
+                    # Run aggressive cleanup only when free space on /tmp is low.
+                    FREE_KB=$(df -Pk /tmp | awk 'NR==2 {print $4}')
+                    MIN_FREE_KB=3145728
+                    if [ "${FREE_KB}" -lt "${MIN_FREE_KB}" ]; then
+                        echo "Low disk on /tmp detected (${FREE_KB} KB free). Running deep cleanup..."
+                        rm -rf /tmp/trivy-* /tmp/sonar-* || true
+                        docker builder prune -af || true
+                        docker image prune -af || true
+                        docker container prune -f || true
+                    else
+                        docker builder prune -f || true
+                    fi
                 '''
             }
         }
@@ -119,9 +134,9 @@ pipeline {
         stage('Image Scan (Trivy)') {
             steps {
                 sh '''
-                    rm -rf /tmp/trivy-${SERVICE}-${BUILD_NUMBER} /tmp/trivy-cache-${SERVICE}-${BUILD_NUMBER}
-                    mkdir -p /tmp/trivy-cache-${SERVICE}-${BUILD_NUMBER}
-                    export TRIVY_CACHE_DIR="/tmp/trivy-cache-${SERVICE}-${BUILD_NUMBER}"
+                    rm -rf /tmp/trivy-${SERVICE}-${BUILD_NUMBER}
+                    mkdir -p /var/jenkins_home/.cache/trivy/${SERVICE}
+                    export TRIVY_CACHE_DIR="/var/jenkins_home/.cache/trivy/${SERVICE}"
                     export TRIVY_SKIP_DB_UPDATE=false
                     trivy image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress --cache-dir ${TRIVY_CACHE_DIR} ${IMAGE}:${IMAGE_TAG}
                 '''
@@ -138,6 +153,9 @@ pipeline {
                     aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
                     docker push ${IMAGE}:${IMAGE_TAG}
                     docker push ${IMAGE}:latest
+
+                    # Free host storage after push; registry already stores image artifacts.
+                    docker rmi ${IMAGE}:${IMAGE_TAG} ${IMAGE}:latest || true
                 '''
             }
         }

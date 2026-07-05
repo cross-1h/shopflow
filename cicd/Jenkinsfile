@@ -47,6 +47,18 @@ pipeline {
             }
         }
 
+        stage('Clean workspace and caches') {
+            steps {
+                sh '''
+                    set -e
+                    rm -rf ${SERVICE_DIR}/target ${SERVICE_DIR}/.scannerwork
+                    rm -rf /tmp/sonar-status.json
+                    rm -rf /tmp/trivy-${SERVICE}-${BUILD_NUMBER} /tmp/trivy-cache-${SERVICE}-${BUILD_NUMBER}
+                    docker builder prune -f || true
+                '''
+            }
+        }
+
         stage('Build') { steps { dir("${SERVICE_DIR}") { sh 'mvn -B -ntp clean compile' } } }
 
         stage('Test + Coverage') {

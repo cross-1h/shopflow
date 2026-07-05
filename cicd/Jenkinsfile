@@ -29,8 +29,8 @@ pipeline {
         ECR_REGISTRY = "${ECR_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com"
         IMAGE        = "${ECR_REGISTRY}/${IMAGE_REPO}"
 
-        SONAR_HOST   = "${params.SONAR_HOST}"
-        NEXUS_URL    = "${params.NEXUS_URL}"
+        SONAR_HOST   = "${params.SONAR_HOST ?: 'http://100.51.104.230:9000'}"
+        NEXUS_URL    = "${params.NEXUS_URL ?: 'http://100.51.104.230:8081/repository/maven-releases/'}"
 
         AWS_CREDS    = credentials('aws-ecr')
         SONAR_TOKEN  = credentials('sonar-token')
@@ -62,8 +62,9 @@ pipeline {
             steps {
                 dir("${SERVICE_DIR}") {
                     sh '''
-                        SONAR_URL="${SONAR_HOST:-http://100.51.104.230:9000}"
+                        SONAR_URL="${SONAR_HOST}"
                         echo "Using SonarQube URL: ${SONAR_URL}"
+                        echo "Resolved SONAR_HOST=${SONAR_HOST}"
                         curl -fsS "${SONAR_URL}/api/system/status" > /tmp/sonar-status.json \
                           || { echo "SonarQube is not reachable at ${SONAR_URL} from the Jenkins executor"; exit 1; }
                         mvn -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar \
@@ -86,7 +87,7 @@ pipeline {
             steps {
                 dir("${SERVICE_DIR}") {
                     sh '''
-                        NEXUS_REPO_URL="${NEXUS_URL:-http://100.51.104.230:8081/repository/maven-releases/}"
+                        NEXUS_REPO_URL="${NEXUS_URL}"
                         echo "Using Nexus URL: ${NEXUS_REPO_URL}"
                         export NEXUS_USERNAME=${NEXUS_CREDS_USR}
                         export NEXUS_PASSWORD=${NEXUS_CREDS_PSW}

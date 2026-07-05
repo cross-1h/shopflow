@@ -14,13 +14,14 @@ pipeline {
 
     parameters {
         choice(name: 'SERVICE', choices: ['catalog', 'orders', 'notifications'], description: 'Which service to build')
+        string(name: 'SONAR_HOST', defaultValue: 'http://sonarqube:9000', description: 'SonarQube URL reachable from Jenkins executor')
+        string(name: 'NEXUS_URL', defaultValue: 'http://nexus:8081/repository/maven-releases/', description: 'Nexus repository URL reachable from Jenkins executor')
     }
 
     environment {
         AWS_REGION   = 'us-east-1'
         ECR_ACCOUNT  = '922685583704'
         EKS_CLUSTER  = 'shopflow'
-        NEXUS_URL    = 'http://100.51.104.230:8081/repository/maven-releases/'
 
         SERVICE_DIR  = "services/${params.SERVICE}-service"
         IMAGE_REPO   = "shopflow-${params.SERVICE}"
@@ -28,7 +29,6 @@ pipeline {
         ECR_REGISTRY = "${ECR_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com"
         IMAGE        = "${ECR_REGISTRY}/${IMAGE_REPO}"
 
-        SONAR_HOST   = 'http://100.51.104.230:9000'
         AWS_CREDS    = credentials('aws-ecr')
         SONAR_TOKEN  = credentials('sonar-token')
         NEXUS_CREDS  = credentials('nexus')

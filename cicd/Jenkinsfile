@@ -107,8 +107,11 @@ pipeline {
         stage('Image Scan (Trivy)') {
             steps {
                 sh '''
-                    export TRIVY_CACHE_DIR="/tmp/trivy-${SERVICE}-${BUILD_NUMBER}"
-                    trivy image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress ${IMAGE}:${IMAGE_TAG}
+                    rm -rf /tmp/trivy-${SERVICE}-${BUILD_NUMBER} /tmp/trivy-cache-${SERVICE}-${BUILD_NUMBER}
+                    mkdir -p /tmp/trivy-cache-${SERVICE}-${BUILD_NUMBER}
+                    export TRIVY_CACHE_DIR="/tmp/trivy-cache-${SERVICE}-${BUILD_NUMBER}"
+                    export TRIVY_SKIP_DB_UPDATE=false
+                    trivy image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress --cache-dir ${TRIVY_CACHE_DIR} ${IMAGE}:${IMAGE_TAG}
                 '''
             }
         }

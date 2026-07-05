@@ -14,8 +14,8 @@ pipeline {
 
     parameters {
         choice(name: 'SERVICE', choices: ['catalog', 'orders', 'notifications'], description: 'Which service to build')
-        string(name: 'SONAR_HOST', defaultValue: 'http://sonarqube:9000', description: 'SonarQube URL reachable from Jenkins executor')
-        string(name: 'NEXUS_URL', defaultValue: 'http://nexus:8081/repository/maven-releases/', description: 'Nexus repository URL reachable from Jenkins executor')
+        string(name: 'SONAR_HOST', defaultValue: 'http://127.0.0.1:9000', description: 'SonarQube URL reachable from Jenkins executor')
+        string(name: 'NEXUS_URL', defaultValue: 'http://127.0.0.1:8081/repository/maven-releases/', description: 'Nexus repository URL reachable from Jenkins executor')
     }
 
     environment {
@@ -29,8 +29,8 @@ pipeline {
         ECR_REGISTRY = "${ECR_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com"
         IMAGE        = "${ECR_REGISTRY}/${IMAGE_REPO}"
 
-        SONAR_HOST   = "${params.SONAR_HOST ?: 'http://sonarqube:9000'}"
-        NEXUS_URL    = "${params.NEXUS_URL ?: 'http://nexus:8081/repository/maven-releases/'}"
+        SONAR_HOST   = "${params.SONAR_HOST}"
+        NEXUS_URL    = "${params.NEXUS_URL}"
 
         AWS_CREDS    = credentials('aws-ecr')
         SONAR_TOKEN  = credentials('sonar-token')
@@ -62,8 +62,10 @@ pipeline {
             steps {
                 dir("${SERVICE_DIR}") {
                     sh '''
-                        SONAR_URL="${SONAR_HOST:-http://sonarqube:9000}"
+                        SONAR_URL="${SONAR_HOST:-http://127.0.0.1:9000}"
                         echo "Using SonarQube URL: ${SONAR_URL}"
+                        curl -fsS "${SONAR_URL}/api/system/status" > /tmp/sonar-status.json \
+                          || { echo "SonarQube is not reachable at ${SONAR_URL} from the Jenkins executor"; exit 1; }
                         mvn -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar \
                           -Dsonar.host.url=${SONAR_URL} \
                           -Dsonar.token=${SONAR_TOKEN} \
@@ -84,7 +86,7 @@ pipeline {
             steps {
                 dir("${SERVICE_DIR}") {
                     sh '''
-                        NEXUS_REPO_URL="${NEXUS_URL:-http://nexus:8081/repository/maven-releases/}"
+                        NEXUS_REPO_URL="${NEXUS_URL:-http://127.0.0.1:8081/repository/maven-releases/}"
                         echo "Using Nexus URL: ${NEXUS_REPO_URL}"
                         export NEXUS_USERNAME=${NEXUS_CREDS_USR}
                         export NEXUS_PASSWORD=${NEXUS_CREDS_PSW}

@@ -59,8 +59,10 @@ pipeline {
             steps {
                 dir("${SERVICE_DIR}") {
                     sh '''
+                                                SONAR_URL="${SONAR_HOST:-http://sonarqube:9000}"
+                                                echo "Using SonarQube URL: ${SONAR_URL}"
                         mvn -B -ntp sonar:sonar \
-                          -Dsonar.host.url=${SONAR_HOST} \
+                                                    -Dsonar.host.url=${SONAR_URL} \
                           -Dsonar.token=${SONAR_TOKEN} \
                                                     -Dsonar.login=${SONAR_TOKEN} \
                           -Dsonar.projectKey=shopflow-${SERVICE} \
@@ -80,11 +82,13 @@ pipeline {
             steps {
                 dir("${SERVICE_DIR}") {
                     sh '''
+                        NEXUS_REPO_URL="${NEXUS_URL:-http://nexus:8081/repository/maven-releases/}"
+                        echo "Using Nexus URL: ${NEXUS_REPO_URL}"
                         export NEXUS_USERNAME=${NEXUS_CREDS_USR}
                         export NEXUS_PASSWORD=${NEXUS_CREDS_PSW}
                         mvn -B -ntp deploy:deploy-file \
                           -s ../../cicd/settings-nexus.xml \
-                          -Durl=${NEXUS_URL} \
+                          -Durl=${NEXUS_REPO_URL} \
                           -DrepositoryId=nexus \
                           -Dfile=target/app.jar \
                           -DgroupId=com.shopflow -DartifactId=${SERVICE}-service -Dversion=1.0.${BUILD_NUMBER} -Dpackaging=jar

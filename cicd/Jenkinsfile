@@ -29,6 +29,9 @@ pipeline {
         ECR_REGISTRY = "${ECR_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com"
         IMAGE        = "${ECR_REGISTRY}/${IMAGE_REPO}"
 
+        SONAR_HOST   = "${params.SONAR_HOST ?: 'http://sonarqube:9000'}"
+        NEXUS_URL    = "${params.NEXUS_URL ?: 'http://nexus:8081/repository/maven-releases/'}"
+
         AWS_CREDS    = credentials('aws-ecr')
         SONAR_TOKEN  = credentials('sonar-token')
         NEXUS_CREDS  = credentials('nexus')
@@ -63,8 +66,7 @@ pipeline {
                                                 echo "Using SonarQube URL: ${SONAR_URL}"
                         mvn -B -ntp sonar:sonar \
                                                     -Dsonar.host.url=${SONAR_URL} \
-                          -Dsonar.token=${SONAR_TOKEN} \
-                                                    -Dsonar.login=${SONAR_TOKEN} \
+                          -Dsonar.login=${SONAR_TOKEN} \
                           -Dsonar.projectKey=shopflow-${SERVICE} \
                           -Dsonar.qualitygate.wait=true
                     '''

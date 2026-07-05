@@ -14,8 +14,8 @@ pipeline {
 
     parameters {
         choice(name: 'SERVICE', choices: ['catalog', 'orders', 'notifications'], description: 'Which service to build')
-        string(name: 'SONAR_HOST', defaultValue: 'http://127.0.0.1:9000', description: 'SonarQube URL reachable from Jenkins executor')
-        string(name: 'NEXUS_URL', defaultValue: 'http://127.0.0.1:8081/repository/maven-releases/', description: 'Nexus repository URL reachable from Jenkins executor')
+        string(name: 'SONAR_HOST', defaultValue: 'http://100.51.104.230:9000', description: 'SonarQube URL reachable from Jenkins executor')
+        string(name: 'NEXUS_URL', defaultValue: 'http://100.51.104.230:8081/repository/maven-releases/', description: 'Nexus repository URL reachable from Jenkins executor')
     }
 
     environment {
@@ -62,7 +62,7 @@ pipeline {
             steps {
                 dir("${SERVICE_DIR}") {
                     sh '''
-                        SONAR_URL="${SONAR_HOST:-http://127.0.0.1:9000}"
+                        SONAR_URL="${SONAR_HOST:-http://100.51.104.230:9000}"
                         echo "Using SonarQube URL: ${SONAR_URL}"
                         curl -fsS "${SONAR_URL}/api/system/status" > /tmp/sonar-status.json \
                           || { echo "SonarQube is not reachable at ${SONAR_URL} from the Jenkins executor"; exit 1; }
@@ -86,7 +86,7 @@ pipeline {
             steps {
                 dir("${SERVICE_DIR}") {
                     sh '''
-                        NEXUS_REPO_URL="${NEXUS_URL:-http://127.0.0.1:8081/repository/maven-releases/}"
+                        NEXUS_REPO_URL="${NEXUS_URL:-http://100.51.104.230:8081/repository/maven-releases/}"
                         echo "Using Nexus URL: ${NEXUS_REPO_URL}"
                         export NEXUS_USERNAME=${NEXUS_CREDS_USR}
                         export NEXUS_PASSWORD=${NEXUS_CREDS_PSW}

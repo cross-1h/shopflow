@@ -53,7 +53,7 @@ Create Jenkins credentials with IDs:
 
 ## The artifact store
 
-The `Publish artifact to Nexus` stage uploads the built jar to Nexus. That gives you a versioned history of every build output, separate from the runtime images in ECR. `settings-nexus.xml` documents the server id the deploy step uses.
+The `Publish artifact to Nexus` stage uploads the built jar to Nexus. That gives you a versioned history of every build output, separate from the runtime images in ECR. `settings-nexus.xml` documents the server id the deploy step uses..
 
 ## The deploy
 

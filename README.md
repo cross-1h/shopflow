@@ -1,16 +1,12 @@
 # ShopFlow Working Guide (Phase 1 + Phase 2)
 
-This file keeps the instructor flow from:
-- README.md (Phase 1)
-- README_old.md (Phase 2)
-
-It also adds the real issues I hit during implementation and the fixes.
+This file contains the real issues I hit during implementation and the fixes.
 
 ## How to use this file
 
-1. Follow the same step order as the instructor's.
-2. Under each step, check the "Challenges I hit" section.
-3. Apply the "Resolution" notes before rerunning.
+1. Follow the same step order as is in this document.
+2. After each step, read the short "If this step fails" block before rerunning.
+3. Use the short reference section at the end for cross-cutting issues that show up more than once.
 
 ---
 
@@ -60,6 +56,21 @@ helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
 kubectl get deployment -n kube-system aws-load-balancer-controller
 ```
 
+If this step fails:
+- If `kubectl get ingress` shows no address for a long time, the ALB controller often needs more IAM permissions.
+- Add these actions to the policy used by the controller:
+  - `elasticloadbalancing:DescribeListenerAttributes`
+  - `elasticloadbalancing:ModifyListenerAttributes`
+- Re-apply Terraform/IAM changes, restart the controller, and verify the deployment again.
+
+```bash
+cd infra
+terraform apply
+kubectl rollout restart deployment aws-load-balancer-controller -n kube-system
+kubectl get deployment -n kube-system aws-load-balancer-controller
+kubectl logs -n kube-system deployment/aws-load-balancer-controller --tail=100
+```
+
 ### Step 4: Build and push images to ECR
 
 ```bash
@@ -76,6 +87,29 @@ done
 
 docker build -t $REGISTRY/shopflow-storefront:1.0 storefront
 docker push $REGISTRY/shopflow-storefront:1.0
+```
+
+If this step fails:
+- If your pods crash with platform mismatch errors, rebuild the images for `linux/amd64` from macOS.
+
+```bash
+ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
+REGION=us-east-1
+REGISTRY=$ACCOUNT.dkr.ecr.$REGION.amazonaws.com
+
+aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $REGISTRY
+
+for svc in catalog orders notifications; do
+  docker buildx build --platform linux/amd64 \
+    -t $REGISTRY/shopflow-$svc:1.0 \
+    services/$svc-service \
+    --push
+done
+
+docker buildx build --platform linux/amd64 \
+  -t $REGISTRY/shopflow-storefront:1.0 \
+  storefront \
+  --push
 ```
 
 ### Step 5: Fill configuration
@@ -99,9 +133,9 @@ sed -i "s|REPLACE_STOREFRONT_IMAGE|$REGISTRY/shopflow-storefront:1.0|"       k8s
 ```
 
 Why this works:
-- The instructor command copies `k8s/db-secret.example.yaml` first.
+- The command copies `k8s/db-secret.example.yaml` first.
 - That template already uses `stringData` (not `data`), so your plain password is safely encoded by Kubernetes when applied.
-- In short: our "fix" was to keep using a `stringData` template and avoid manual base64 handling.
+- In short: the safe fix is to keep using a `stringData` template and avoid manual base64 handling.
 
 macOS `sed` variant used in this project:
 
@@ -121,7 +155,10 @@ sed -i "" "s|REPLACE_NOTIFICATIONS_IMAGE|$REGISTRY/shopflow-notifications:1.0|" 
 sed -i "" "s|REPLACE_STOREFRONT_IMAGE|$REGISTRY/shopflow-storefront:1.0|"       k8s/storefront.yaml
 ```
 
-If your region is not `us-east-1`, also update `AWS_REGION` in `k8s/shared-config.yaml`.
+If this step fails:
+- If the backend pods crash with DB authentication errors, the secret is usually the culprit.
+- Use the `stringData`-based template and apply it as shown above.
+- If your region is not `us-east-1`, also update `AWS_REGION` in `k8s/shared-config.yaml`.
 
 ### Step 6: Deploy manifests
 
@@ -136,6 +173,15 @@ kubectl apply -f k8s/ingress.yaml
 kubectl get pods
 ```
 
+If this step fails:
+- Check the pod states first, then inspect logs for the failing service.
+
+```bash
+kubectl get pods
+kubectl describe pod -l app=catalog-service
+kubectl logs -l app=notifications-service --tail=50
+```
+
 ### Step 7: Verify order flow
 
 ```bash
@@ -143,378 +189,93 @@ kubectl get ingress shopflow
 kubectl logs -l app=notifications-service --tail=20
 ```
 
+If this step fails:
+- If the ingress has no address yet, wait a few more minutes for the ALB and target registration to complete.
+- After that, re-run the same check and verify the storefront loads in the browser.
+
 ---
 
 ## Phase 2: Operate It as a Platform
 
 ### Carry-over changes from Phase 1
 
-1. Add Micrometer Prometheus registry to backend pom.xml files.
+1. Add Micrometer Prometheus registry to backend `pom.xml` files.
 2. Run storefront as non-root:
-- nginx listen on 8080
-- use nginx unprivileged image
+- nginx listens on port `8080`
+- use an unprivileged nginx image
 
-### Recommended order (same as instructor)
+### Recommended order (same as original)
 
-1. Secrets (platform/secrets/SETUP.md)
-2. IRSA for app service account
-3. Monitoring (platform/monitoring/SETUP.md)
-4. Logging (platform/logging/SETUP.md)
-5. TLS + Cognito (platform/ingress-tls-cognito/SETUP.md)
-6. Deploy with Helm
-7. CI/CD (cicd/README.md)
+1. **Secrets** (`platform/secrets/SETUP.md`): create the Secrets Manager secret, install External Secrets, apply `external-secret.yaml`. Confirm the `shopflow-db` Secret appears.
+2. **IRSA for the app**: create an IAM role that allows SQS access and bind it to the `shopflow` service account; put its ARN in `values.yaml` as `serviceAccount.roleArn`.
+3. **Monitoring** (`platform/monitoring/SETUP.md`): install kube-prometheus-stack, apply the alert rules.
+4. **Logging** (`platform/logging/SETUP.md`): install Fluent Bit.
+5. **TLS and Cognito** (`platform/ingress-tls-cognito/SETUP.md`): request the certificate, create the Cognito pool, fill the `ingress` values.
+6. **Deploy with Helm** (below).
+7. **CI/CD** (`cicd/README.md`): wire the pipelines so future changes ship automatically.
 
----
+### Step 6: Deploy with Helm
 
-## Challenges We Hit and Simple Resolutions
-
-This section is grouped by the instructor step where the issue happened.
-
-### Phase 1, Step 4: Build and push images to ECR
-
-#### Phase 1 - Challenge 1: Pods failed with platform mismatch (CrashLoopBackOff / image startup failure)
-- Symptom: pods failed to start with platform-related errors (arm64 image on amd64 nodes).
-
-Resolution:
-- Build and push linux/amd64 images from macOS M1 using Docker buildx.
-- Commands used:
+Use Helm to deploy the platform after the supporting services are in place.
 
 ```bash
-ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-REGION=us-east-1
-REGISTRY=$ACCOUNT.dkr.ecr.$REGION.amazonaws.com
-
-aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $REGISTRY
-
-for svc in catalog orders notifications; do
-  docker buildx build --platform linux/amd64 \
-    -t $REGISTRY/shopflow-$svc:1.0 \
-    services/$svc-service \
-    --push
-done
-
-docker buildx build --platform linux/amd64 \
-  -t $REGISTRY/shopflow-storefront:1.0 \
-  storefront \
-  --push
+helm upgrade --install shopflow helm/shopflow \
+  --namespace default \
+  --reuse-values
 ```
 
-### Phase 1, Step 5: Fill configuration
-
-#### Phase 1 - Challenge 2: Database authentication failed even with Secret present
-- Symptom: backend services crashed with DB auth errors (password looked missing/corrupted).
-
-Resolution:
-- Use Kubernetes Secret stringData for plain text input so Kubernetes handles base64 encoding safely.
-- Avoid hidden newline/formatting issues when generating secrets from terminal values.
-
-Exact change that fixed it:
-
-```yaml
-apiVersion: v1
-kind: Secret
-metadata:
-  name: db-credentials
-type: Opaque
-stringData:
-  username: "shopflow"
-  password: "REPLACE_WITH_DB_PASSWORD"
-```
-
-Exact instruction used in this project:
+If this step fails:
+- Keep per-service image tags separate in Helm values.
+- When deploying one service, override only that service tag.
 
 ```bash
-cp k8s/db-secret.example.yaml k8s/db-secret.yaml
-sed -i "" "s|REPLACE_WITH_DB_PASSWORD|$TF_VAR_db_password|" k8s/db-secret.yaml
-kubectl apply -f k8s/db-secret.yaml
+helm upgrade --install shopflow helm/shopflow \
+  --namespace default \
+  --reuse-values \
+  --set-string image.tags.${SERVICE}=${IMAGE_TAG}
 ```
 
-Instructor vs our solution (simple view):
-- Instructor flow: copy template + replace password + apply secret.
-- What we made explicit: this only works safely because the template is `stringData`-based.
-- If the template were `data:` instead, you would need manual base64 values and could easily corrupt the password.
+### Step 7: CI/CD
 
-### Phase 1, Step 3: Install AWS Load Balancer Controller
+Run the backend pipelines one service at a time, then run the storefront pipeline separately.
 
-#### Phase 1 - Challenge 3: Ingress ADDRESS stayed empty for a long time
-- Symptom: kubectl get ingress showed no ADDRESS.
-
-Resolution:
-- Add missing IAM permission used by current ALB controller:
-- elasticloadbalancing:DescribeListenerAttributes
-- elasticloadbalancing:ModifyListenerAttributes
-- Add these actions to policy: AWSLoadBalancerControllerIAMPolicy
-- Re-apply Terraform/IAM changes, then restart controller deployment.
-
-Commands used:
+If this step fails:
+- If the pipeline uses the wrong service, verify that `SERVICE` is set explicitly for each job.
+- If `npm ci` fails, make sure the storefront repo has a lockfile or fall back to `npm install`.
+- If Sonar cannot reach the server, point `SONAR_HOST` at a host-reachable URL such as the EC2 public IP.
+- If Trivy or Sonar fail due to disk pressure, clean caches and temporary files before the build.
+- If Nexus upload returns `401`, verify the repository permissions and the Jenkins credential mapping.
+- If Helm renders an invalid image tag, use `--set-string` instead of `--set` for numeric build numbers.
 
 ```bash
-# 1) Update IAM policy JSON used by Terraform/infra to include:
-#    - elasticloadbalancing:DescribeListenerAttributes
-#    - elasticloadbalancing:ModifyListenerAttributes
-
-# 2) Re-apply infra/IAM changes
-cd infra
-terraform apply
-
-# 3) Restart ALB controller so it reloads permissions and re-syncs resources
-kubectl rollout restart deployment aws-load-balancer-controller -n kube-system
-
-# 4) Verify controller is healthy
-kubectl get deployment -n kube-system aws-load-balancer-controller
-kubectl logs -n kube-system deployment/aws-load-balancer-controller --tail=100
-
-# 5) Verify ingress now has an ALB DNS address
-kubectl get ingress shopflow
-# Expected: the ADDRESS column is populated (not empty)
-```
-
-#### Phase 1 - Challenge 4: ALB address appeared but site was still unreachable
-- Symptom: ingress had an ALB DNS name, but browser/curl could not reach app.
-
-Resolution:
-- In this project, the real fix was to wait a few more minutes for ALB provisioning/target registration to finish.
-- After waiting, open the same ALB ADDRESS again; the storefront should load.
-
-### Phase 2, Step 7: CI/CD (cicd/README.md)
-
-#### Phase 2 - Challenge 1: Jenkins used wrong service or unexpected SERVICE value
-- Symptom: pipeline logs looked like wrong service artifacts/scans were being used.
-
-Resolution:
-- Keep one backend Jenkinsfile parameterized by SERVICE.
-- In each Jenkins job, set SERVICE explicitly (catalog, orders, notifications).
-- Add a "Resolve Service" stage that prints SERVICE and SERVICE_DIR so you can verify early.
-
-#### Phase 2 - Challenge 2: Storefront npm ci failed
-- Symptom: npm ci failed because package-lock.json was missing.
-
-Resolution:
-- Stage and step:
-- Phase 2 -> Step 7 (CI/CD), storefront Jenkins pipeline (`cicd/Jenkinsfile.storefront`), stage `Install + Build`.
-- Actual code used:
-
-```bash
-# Use npm ci when lockfile exists for reproducible installs in CI.
+# Example storefront fallback for CI
 if [ -f package-lock.json ]; then
   npm ci
 else
-  # Fall back to npm install if lockfile is not committed.
   npm install
 fi
-# Build storefront assets after dependency install succeeds.
 npm run build
 ```
 
-Why it matters:
-- Reproducible builds
-- Without lockfile: `npm install` may pull newer compatible versions over time.
-- With lockfile: `npm ci` installs exactly what is recorded, so local/dev/CI/prod match.
-- Faster and safer CI
-- `npm ci` is optimized for CI and requires the lockfile.
-- It avoids "works on my machine" drift caused by dependency updates.
-- Deterministic security and debugging
-- If a build breaks or a vuln scan changes, you can trace it to a specific locked version.
-- Easier rollback because dependency state is pinned.
-
-#### Phase 2 - Challenge 4: Sonar host URL was unreachable from Jenkins
-- Symptom: scanner tried http://sonarqube:9000 and failed to query server version.
-
-Resolution:
-- Use host-reachable SONAR_HOST. In this setup, I used the EC2 server public IP (for example, `http://<EC2-HOST-PUBLIC-IP>:9000`).
-
-#### Phase 2 - Challenge 5: Sonar server health issue (embedded Elasticsearch shard/index errors)
-- Symptom: Sonar UI/service unstable even with correct URL.
-
-Resolution:
-- Root cause in this project: insufficient EC2 storage (20GB EBS volume), which caused the host to run out of space.
-- Practical fix implemented: add cache/stale-file cleanup logic before every Jenkins pipeline build.
-- Jenkinsfile stage where this was added: `Clean workspace and caches` (runs before Build/Test/Sonar).
-- Actual code used:
-
-```bash
-set -e
-rm -rf ${SERVICE_DIR}/target ${SERVICE_DIR}/.scannerwork
-rm -rf /tmp/sonar-status.json
-rm -rf /tmp/trivy-${SERVICE}-${BUILD_NUMBER} /tmp/trivy-cache-${SERVICE}-${BUILD_NUMBER}
-
-# Keep one shared Trivy cache for all services to avoid duplicate DB copies.
-mkdir -p ${TRIVY_CACHE_DIR}
-
-# Run aggressive cleanup when free space is low on the cache filesystem.
-FREE_KB=$(df -Pk /var/jenkins_home | awk 'NR==2 {print $4}')
-MIN_FREE_KB=6291456
-if [ "${FREE_KB}" -lt "${MIN_FREE_KB}" ]; then
-  echo "Low disk on /var/jenkins_home detected (${FREE_KB} KB free). Running deep cleanup..."
-  rm -rf /tmp/trivy-* /tmp/sonar-* || true
-  trivy clean --scan-cache || true
-  docker builder prune -af || true
-  docker image prune -af || true
-  docker container prune -f || true
-else
-  docker builder prune -f || true
-fi
-```
-
-- Extra protection added in Image Scan stage when disk is low:
-
-```bash
-FREE_KB=$(df -Pk /var/jenkins_home | awk 'NR==2 {print $4}')
-MIN_FREE_KB=5242880
-if [ "${FREE_KB}" -lt "${MIN_FREE_KB}" ]; then
-  trivy clean --scan-cache || true
-  docker image prune -f || true
-  docker builder prune -f || true
-fi
-```
-
-#### Phase 2 - Challenge 6: Nexus publish failed with 401
-- Symptom: deploy-file stage returned unauthorized.
-
-Resolution:
-- Fix Nexus user permissions for maven-releases upload.
-- Ensure Jenkins nexus credential matches that deploy user.
-- Keep NEXUS_URL (http://<EC2-HOST-PUPLIC-URL>:8081) reachable from Jenkins executor.
-
-Nexus dashboard steps used:
-- Log in to Nexus as admin.
-- Go to `Security` -> `Roles` -> `Create role` (or edit an existing CI deploy role).
-- Add these four privileges for `maven-releases`:
-- `nx-repository-view-maven2-maven-releases-browse`
-- `nx-repository-view-maven2-maven-releases-read`
-- `nx-repository-view-maven2-maven-releases-add`
-- `nx-repository-view-maven2-maven-releases-edit`
-- Save the role.
-- Confirm the Jenkins `nexus` credential username/password exactly match the Nexus user you just updated.
-
-#### Phase 2 - Challenge 7: Helm deploy rendered invalid image tag for numeric build number
-- Symptom: image looked like %!s(int64=3) and rollout failed.
-
-Before this change (`cicd/Jenkinsfile`):
-
-```bash
-helm upgrade --install shopflow helm/shopflow \
-  --reuse-values \
-  --set image.tags.${SERVICE}=${IMAGE_TAG}
-```
-
-Resolution:
-- Stage and step:
-- Phase 2 -> Step 7 (CI/CD), backend Jenkins pipeline (`cicd/Jenkinsfile`), stage `Deploy with Helm`.
-
-- Exact command used in this project (`cicd/Jenkinsfile`):
-
-```bash
-helm upgrade --install shopflow helm/shopflow \
-  --namespace default \
-  --reuse-values \
-  --set-string image.tags.${SERVICE}=${IMAGE_TAG}
-```
-
-- This fixed numeric build tag handling and stopped invalid image rendering during Helm deploy.
-
-#### Phase 2 - Challenge 8: JUnit report stage failed when no xml files existed
-- Symptom: post step marked build unstable/fail for missing reports.
-
-Resolution:
-- Stage and step:
-- Phase 2 -> Step 7 (CI/CD), backend Jenkins pipeline (`cicd/Jenkinsfile`), stage `Test + Coverage`, `post { always { ... } }`.
-
-- `allowEmptyResults` should be set to `true` for the JUnit publisher.
-
-- Exact code used in this project (`cicd/Jenkinsfile`):
-
-```groovy
-stage('Test + Coverage') {
-  steps { dir("${SERVICE_DIR}") { sh 'mvn -B -ntp test' } }
-  post {
-    always {
-      junit testResults: "${SERVICE_DIR}/target/surefire-reports/*.xml", allowEmptyResults: true // keep true so missing XML does not fail the stage
-    }
-  }
-}
-```
-
-#### Phase 2 - Challenge 9: Trivy image scan found runtime critical vulnerabilities
-- Symptom: storefront image scan failed on OpenSSL-related CVEs.
-
-Resolution:
-- Update storefront runtime image packages (libcrypto/libssl) in the Dockerfile, then rebuild and rescan through this pipeline.
-- Stage and step:
-- Phase 2 -> Step 7 (CI/CD), storefront Jenkins pipeline (`cicd/Jenkinsfile.storefront`), stages `Docker Build` and `Image Scan (Trivy)`.
-
-- Exact code used in this project (`cicd/Jenkinsfile.storefront`):
-
-```groovy
-
-stage('Image Scan (Trivy)') {
-  steps {
-    sh '''
-      export TRIVY_SKIP_DB_UPDATE=false
-      trivy image --scanners vuln --severity CRITICAL --ignore-unfixed --exit-code 1 --no-progress --cache-dir ${TRIVY_CACHE_DIR} ${IMAGE}:${IMAGE_TAG}
-    '''
-  }
-}
-```
-
-- What `--severity CRITICAL` + `--ignore-unfixed` did in this fix:
-- `--severity CRITICAL` limited the gate to only CRITICAL findings.
-- `--ignore-unfixed` ignored CRITICAL findings that had no available upstream patch yet.
-- Together, the pipeline failed only on fixable CRITICAL vulnerabilities, which removed noisy non-actionable failures.
-- After upgrading `libcrypto/libssl` in the storefront runtime image, the remaining fixable CRITICAL findings were resolved and the scan passed.
-
 ---
 
-## Phase 2, Step 6: Deploy with Helm
+## Quick reference: cross-cutting issues
 
-### Challenge: Updating one service image tag accidentally affected others
-- Symptom: deploying one service changed tags unexpectedly or clobbered values.
-
-Resolution:
-- Keep Helm values with per-service tags.
-- During deploy, only override image.tags.<service> for selected service.
-- Use --reuse-values so existing service tags stay unchanged.
-
-Exact values used in this project (`helm/shopflow/values.yaml`):
-
-```yaml
-image:
-  tag: "1.0"
-  tags:
-    catalog: ""
-    orders: ""
-    notifications: ""
-    storefront: ""
-```
-
-Exact deploy override used in this project (`cicd/Jenkinsfile`):
-
-```bash
-helm upgrade --install shopflow helm/shopflow \
-  --namespace default \
-  --reuse-values \
-  --set-string image.tags.${SERVICE}=${IMAGE_TAG}
-```
-
-Storefront deploy override used in this project (`cicd/Jenkinsfile.storefront`):
-
-```bash
-helm upgrade --install shopflow helm/shopflow \
-  --namespace default \
-  --reuse-values \
-  --set-string image.tags.storefront=${IMAGE_TAG}
-```
+- Platform mismatch: rebuild images as `linux/amd64` when deploying to amd64 EKS nodes.
+- Secret encoding: keep using `stringData` for the DB password secret.
+- ALB controller: add the missing listener-attribute IAM permissions and restart the controller.
+- Sonar/Nexus/Trivy: verify host reachability, credentials, and enough disk space before running CI jobs.
+- Helm deploys: use per-service tag overrides and `--set-string` for numeric image tags.
 
 ---
 
 ## Practical run order that worked for this repo
 
-1. Bring up CI stack (Jenkins/Sonar/Nexus).
-2. Run backend pipelines one service at a time with correct SERVICE value.
-3. Run storefront pipeline separately.
-4. Verify Sonar status endpoint before scan.
-5. Verify enough disk on Jenkins host before Trivy-heavy stages.
-6. Deploy through Helm with per-service tag override.
+1. Bring up the CI stack (Jenkins, Sonar, Nexus).
+2. Run backend pipelines one service at a time with the correct `SERVICE` value.
+3. Run the storefront pipeline separately.
+4. Verify Sonar reachability and disk space before scanning.
+5. Deploy through Helm with per-service tag overrides.
 
 ---
 
@@ -522,8 +283,8 @@ helm upgrade --install shopflow helm/shopflow \
 
 - Phase 1 app loads from ingress and orders succeed.
 - Notifications logs show confirmation event handling.
-- Phase 2 CI/CD does all gates: build, test, Sonar, Trivy, publish, push, deploy.
-- Sonar is reachable from Jenkins with correct host URL.
-- Nexus upload succeeds with correct credential.
+- Phase 2 CI/CD runs build, test, Sonar, Trivy, publish, push, and deploy.
+- Sonar is reachable from Jenkins with the correct host URL.
+- Nexus upload succeeds with the correct credential.
 - Trivy scan runs without cache storage failures.
-- Helm rollout succeeds with correct image tag rendering.
+- Helm rollout succeeds with the correct image tag rendering.

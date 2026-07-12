@@ -11,3 +11,7 @@ infra/terraform.tfstate.backup
 *.log
 /tmp/alb-trust-policy.json
 manage-shopflow.sh
+scripts/generate_shopflow_presentation.py
+shopflow-presentation.pptx
+architecture-hi.png
+architecture.png

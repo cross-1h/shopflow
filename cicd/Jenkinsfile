@@ -101,15 +101,22 @@ pipeline {
                           || { echo "SonarQube is not reachable at ${SONAR_URL} from the Jenkins executor"; exit 1; }
 
                         echo "Checking SonarQube project ${SONAR_PROJECT_KEY}..."
-                        if ! curl -fsS -u "${SONAR_TOKEN}:" "${SONAR_URL}/api/projects/search?projects=${SONAR_PROJECT_KEY}" > /tmp/sonar-projects.json; then
-                            echo "Unable to query SonarQube projects; verify the token and network access."
+                        SEARCH_HTTP_CODE=$(curl -sS -u "${SONAR_TOKEN}:" -o /tmp/sonar-projects.json -w "%{http_code}" "${SONAR_URL}/api/projects/search?projects=${SONAR_PROJECT_KEY}" || true)
+                        if [ "${SEARCH_HTTP_CODE}" = "401" ]; then
+                            echo "Sonar token is not valid for API authentication (401). Check Jenkins credential sonar-token."
                             exit 1
                         fi
-
-                        if ! grep -q "\"key\":\"${SONAR_PROJECT_KEY}\"" /tmp/sonar-projects.json; then
+                        if [ "${SEARCH_HTTP_CODE}" = "403" ]; then
+                            echo "Sonar token is authenticated but cannot browse projects (403). Skipping project pre-check and continuing with scanner."
+                        elif [ "${SEARCH_HTTP_CODE}" != "200" ]; then
+                            echo "Unable to query SonarQube projects (HTTP ${SEARCH_HTTP_CODE}); verify token and network access."
+                            exit 1
+                        elif ! grep -q "\"key\":\"${SONAR_PROJECT_KEY}\"" /tmp/sonar-projects.json; then
                             echo "SonarQube project ${SONAR_PROJECT_KEY} does not exist yet. Creating it with the configured credentials..."
-                            if ! curl -fsS -u "${SONAR_TOKEN}:" -X POST "${SONAR_URL}/api/projects/create?name=${SONAR_PROJECT_NAME}&project=${SONAR_PROJECT_KEY}" > /tmp/sonar-create.json; then
-                                echo "Could not create SonarQube project ${SONAR_PROJECT_KEY}. Create it manually in SonarQube or provide a token/user with Create Project permission."
+                            CREATE_HTTP_CODE=$(curl -sS -u "${SONAR_TOKEN}:" -X POST -o /tmp/sonar-create.json -w "%{http_code}" "${SONAR_URL}/api/projects/create?name=${SONAR_PROJECT_NAME}&project=${SONAR_PROJECT_KEY}" || true)
+                            if [ "${CREATE_HTTP_CODE}" != "200" ]; then
+                                echo "Could not create SonarQube project ${SONAR_PROJECT_KEY} (HTTP ${CREATE_HTTP_CODE})."
+                                echo "Create it manually in SonarQube or use a token/user with Create Project permission."
                                 exit 1
                             fi
                         fi

@@ -11,6 +11,8 @@ aws secretsmanager create-secret \
   --region us-east-1
 ```
 
+Use the real RDS password here, not the placeholder string from the example. If the password in Secrets Manager does not match the database, `catalog-service` and `orders-service` will crash with `FATAL: password authentication failed for user "shopflow"`.
+
 ## 2. Install the External Secrets Operator
 
 ```bash

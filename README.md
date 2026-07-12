@@ -207,6 +207,7 @@ If this step fails:
 ### Recommended order (same as original)
 
 1. **Secrets** (`platform/secrets/SETUP.md`): create the Secrets Manager secret, install External Secrets, apply `external-secret.yaml`. Confirm the `shopflow-db` Secret appears.
+  The secret value must match the live RDS password, or the backend pods will fail during startup.
 2. **IRSA for the app**: create an IAM role that allows SQS access and bind it to the `shopflow` service account; put its ARN in `values.yaml` as `serviceAccount.roleArn`.
 3. **Monitoring** (`platform/monitoring/SETUP.md`): install kube-prometheus-stack, apply the alert rules.
 4. **Logging** (`platform/logging/SETUP.md`): install Fluent Bit.

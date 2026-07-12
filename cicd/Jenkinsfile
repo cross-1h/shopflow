@@ -210,27 +210,58 @@ pipeline {
                     export AWS_ACCESS_KEY_ID=$AWS_CREDS_USR
                     export AWS_SECRET_ACCESS_KEY=$AWS_CREDS_PSW
                     aws eks update-kubeconfig --region ${AWS_REGION} --name ${EKS_CLUSTER}
-                    kubectl get configmap shopflow-config -n default >/dev/null 2>&1 || true
-                    if kubectl get configmap shopflow-config -n default >/dev/null 2>&1; then
-                        echo "Repairing Helm ownership metadata on existing shopflow-config ConfigMap..."
-                        kubectl label configmap shopflow-config -n default app.kubernetes.io/managed-by=Helm --overwrite
-                        kubectl annotate configmap shopflow-config -n default meta.helm.sh/release-name=shopflow meta.helm.sh/release-namespace=default --overwrite
+                    if [ -f infra/terraform.tfstate ]; then
+                        DB_PASSWORD=$(grep -m1 '"password": ' infra/terraform.tfstate | sed -E 's/.*"password": "([^"]+)".*/\1/')
+                        if [ -n "${DB_PASSWORD}" ]; then
+                            echo "Synchronizing shopflow/db secret in AWS Secrets Manager from Terraform state..."
+                            aws secretsmanager update-secret \
+                              --secret-id shopflow/db \
+                              --region ${AWS_REGION} \
+                              --secret-string "{\"username\":\"shopflow\",\"password\":\"${DB_PASSWORD}\"}" >/dev/null
+                            kubectl annotate externalsecret shopflow-db -n default force-sync=$(date +%s) --overwrite >/dev/null 2>&1 || true
+                        fi
                     fi
-                                        for i in 1 2 3; do
-                                            helm upgrade --install shopflow helm/shopflow \
-                                                --namespace default \
-                                                --reuse-values \
-                                                --set-string image.tags.${SERVICE}=${IMAGE_TAG} \
-                                                --force \
-                                                --wait=false \
-                                                && break
-                                            if [ "$i" -eq 3 ]; then
-                                                exit 1
-                                            fi
-                                            echo "Helm deploy attempt $i failed, retrying..."
-                                            sleep 8
-                                        done
-                    kubectl rollout status deployment/${SERVICE}-service --timeout=180s
+
+                    for resource in \
+                        configmap/shopflow-config \
+                        service/catalog-service \
+                        service/orders-service \
+                        service/notifications-service \
+                        service/storefront \
+                        deployment/catalog-service \
+                        deployment/orders-service \
+                        deployment/notifications-service \
+                        deployment/storefront \
+                        ingress/shopflow \
+                        servicemonitor/shopflow-services
+                    do
+                        if kubectl get -n default ${resource} >/dev/null 2>&1; then
+                            echo "Repairing Helm ownership metadata on ${resource}..."
+                            kubectl label -n default ${resource} app.kubernetes.io/managed-by=Helm --overwrite
+                            kubectl annotate -n default ${resource} meta.helm.sh/release-name=shopflow meta.helm.sh/release-namespace=default --overwrite
+                        fi
+                    done
+
+                    if kubectl get secret shopflow-db -n default >/dev/null 2>&1; then
+                        kubectl rollout restart deployment/catalog-service deployment/orders-service -n default >/dev/null 2>&1 || true
+                    fi
+
+                    for i in 1 2 3; do
+                        helm upgrade --install shopflow helm/shopflow \
+                            --namespace default \
+                            --reuse-values \
+                            --set-string image.tags.${SERVICE}=${IMAGE_TAG} \
+                            --force \
+                            --wait=false \
+                            && break
+                        if [ "$i" -eq 3 ]; then
+                            exit 1
+                        fi
+                        echo "Helm deploy attempt $i failed, retrying..."
+                        sleep 8
+                    done
+
+                    kubectl rollout status deployment/${SERVICE}-service --timeout=300s
                 '''
             }
         }

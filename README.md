@@ -243,6 +243,7 @@ If this step fails:
 - If the pipeline uses the wrong service, verify that `SERVICE` is set explicitly for each job.
 - If `npm ci` fails, make sure the storefront repo has a lockfile or fall back to `npm install`.
 - If Sonar cannot reach the server, point `SONAR_HOST` at a host-reachable URL such as the EC2 public IP.
+- If Sonar reports that the project does not exist or cannot be analyzed, create the project in SonarQube and grant the Jenkins token permission to browse and run analysis, or use a token with Create Project permission.
 - If Trivy or Sonar fail due to disk pressure, clean caches and temporary files before the build.
 - If Nexus upload returns `401`, verify the repository permissions and the Jenkins credential mapping.
 - If Helm renders an invalid image tag, use `--set-string` instead of `--set` for numeric build numbers.

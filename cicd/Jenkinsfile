@@ -93,14 +93,32 @@ pipeline {
                 dir("${SERVICE_DIR}") {
                     sh '''
                         SONAR_URL="${SONAR_HOST}"
+                        SONAR_PROJECT_KEY="shopflow-${SERVICE}"
+                        SONAR_PROJECT_NAME="shopflow-${SERVICE}"
                         echo "Using SonarQube URL: ${SONAR_URL}"
                         echo "Resolved SONAR_HOST=${SONAR_HOST}"
                         curl -fsS "${SONAR_URL}/api/system/status" > /tmp/sonar-status.json \
                           || { echo "SonarQube is not reachable at ${SONAR_URL} from the Jenkins executor"; exit 1; }
+
+                        echo "Checking SonarQube project ${SONAR_PROJECT_KEY}..."
+                        if ! curl -fsS "${SONAR_URL}/api/projects/search?projects=${SONAR_PROJECT_KEY}" > /tmp/sonar-projects.json; then
+                            echo "Unable to query SonarQube projects; verify the token and network access."
+                            exit 1
+                        fi
+
+                        if ! grep -q "\"key\":\"${SONAR_PROJECT_KEY}\"" /tmp/sonar-projects.json; then
+                            echo "SonarQube project ${SONAR_PROJECT_KEY} does not exist yet. Creating it with the configured credentials..."
+                            if ! curl -fsS -u "${SONAR_TOKEN}:" -X POST "${SONAR_URL}/api/projects/create?name=${SONAR_PROJECT_NAME}&project=${SONAR_PROJECT_KEY}" > /tmp/sonar-create.json; then
+                                echo "Could not create SonarQube project ${SONAR_PROJECT_KEY}. Create it manually in SonarQube or provide a token/user with Create Project permission."
+                                exit 1
+                            fi
+                        fi
+
                         mvn -B -ntp org.sonarsource.scanner.maven:sonar-maven-plugin:5.7.0.6970:sonar \
                           -Dsonar.host.url=${SONAR_URL} \
                           -Dsonar.token=${SONAR_TOKEN} \
-                          -Dsonar.projectKey=shopflow-${SERVICE} \
+                          -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
+                          -Dsonar.projectName=${SONAR_PROJECT_NAME} \
                           -Dsonar.qualitygate.wait=true
                     '''
                 }

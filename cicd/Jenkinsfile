@@ -221,6 +221,8 @@ pipeline {
                                                 --namespace default \
                                                 --reuse-values \
                                                 --set-string image.tags.${SERVICE}=${IMAGE_TAG} \
+                                                --force \
+                                                --wait=false \
                                                 && break
                                             if [ "$i" -eq 3 ]; then
                                                 exit 1

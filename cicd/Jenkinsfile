@@ -101,7 +101,7 @@ pipeline {
                           || { echo "SonarQube is not reachable at ${SONAR_URL} from the Jenkins executor"; exit 1; }
 
                         echo "Checking SonarQube project ${SONAR_PROJECT_KEY}..."
-                        if ! curl -fsS "${SONAR_URL}/api/projects/search?projects=${SONAR_PROJECT_KEY}" > /tmp/sonar-projects.json; then
+                        if ! curl -fsS -u "${SONAR_TOKEN}:" "${SONAR_URL}/api/projects/search?projects=${SONAR_PROJECT_KEY}" > /tmp/sonar-projects.json; then
                             echo "Unable to query SonarQube projects; verify the token and network access."
                             exit 1
                         fi

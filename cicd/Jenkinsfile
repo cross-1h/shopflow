@@ -126,7 +126,11 @@ pipeline {
                           -Dsonar.token=${SONAR_TOKEN} \
                           -Dsonar.projectKey=${SONAR_PROJECT_KEY} \
                           -Dsonar.projectName=${SONAR_PROJECT_NAME} \
-                          -Dsonar.qualitygate.wait=true
+                          -Dsonar.qualitygate.wait=true \
+                          -Dsonar.qualitygate.timeout=300 || {
+                            echo "Sonar analysis was rejected by SonarQube. Check that the Jenkins token has permission to analyze the project and that the project exists or can be created.";
+                            exit 1;
+                        }
                     '''
                 }
             }

@@ -27,3 +27,8 @@ output "order_events_queue_name" {
 output "order_events_queue_url" {
   value = aws_sqs_queue.order_events.url
 }
+
+output "rds_proxy_endpoint" {
+  description = "Host:port of the RDS Proxy. Use the host part in the DB URL."
+  value       = aws_db_proxy.shopflow_db_proxy.endpoint
+}

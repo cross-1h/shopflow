@@ -11,7 +11,11 @@ metadata:
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}]'
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
+    alb.ingress.kubernetes.io/certificate-arn: arn:aws:acm:us-east-1:922685583704:certificate/b17e7cbc-f3bc-4b31-845a-273cd82a8c99
+    alb.ingress.kubernetes.io/auth-type: cognito
+    alb.ingress.kubernetes.io/auth-idp-cognito: '{"UserPoolArn":"arn:aws:cognito-idp:us-east-1:922685583704:userpool/us-east-1_6vQLoRrBU","UserPoolClientId":"2q9u8td6obd17vopnupvg43tp6","UserPoolDomain":"us-east-16vqlorrbu"}'
+    alb.ingress.kubernetes.io/auth-on-unauthenticated-request: authenticate
 spec:
   ingressClassName: alb
   rules:

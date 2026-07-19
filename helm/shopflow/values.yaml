@@ -32,8 +32,9 @@ dbSecretName: "shopflow-db"
 # Public entry point. The certificate and Cognito values come from
 # platform/ingress-tls-cognito/SETUP.md.
 ingress:
-  certificateArn: "arn:aws:acm:us-east-1:922685583704:certificate/b17e7cbc-f3bc-4b31-845a-273cd82a8c99"
+  host: "shop.crosstechghana.com"
+  certificateArn: "arn:aws:acm:us-east-1:922685583704:certificate/b3144540-f0ad-4650-8a16-1e51cc0981f1"
   cognito:
-    userPoolArn: "arn:aws:cognito-idp:us-east-1:922685583704:userpool/us-east-1_6vQLoRrBU"
-    userPoolClientId: "2q9u8td6obd17vopnupvg43tp6"
-    userPoolDomain: "us-east-16vqlorrbu.auth.us-east-1.amazoncognito.com"
+    userPoolArn: "arn:aws:cognito-idp:us-east-1:922685583704:userpool/us-east-1_YMrhZ9dpX"
+    userPoolClientId: "2k4b4mhqfjurvv5ksvcmflaf3s"
+    userPoolDomain: "us-east-1ymrhz9dpx.auth.us-east-1.amazoncognito.com"

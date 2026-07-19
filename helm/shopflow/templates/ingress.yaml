@@ -1,7 +1,5 @@
-# The hardened front door: HTTPS via an ACM certificate, and Cognito login
-# enforced by the load balancer before any request reaches the app.
-# Fill in the certificate and Cognito values in values.yaml. Setup is in
-# platform/ingress-tls-cognito/SETUP.md.
+# The single front door: HTTPS via an ACM certificate.
+# The AWS Load Balancer Controller turns this Ingress into an ALB.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:
@@ -11,17 +9,13 @@ metadata:
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
-    alb.ingress.kubernetes.io/listen-ports: '[{"HTTPS": 443}]'
-    alb.ingress.kubernetes.io/ssl-redirect: '443'
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP": 80}, {"HTTPS": 443}]'
     alb.ingress.kubernetes.io/certificate-arn: {{ .Values.ingress.certificateArn }}
-    alb.ingress.kubernetes.io/auth-type: cognito
-    alb.ingress.kubernetes.io/auth-idp-cognito: >-
-      {"userPoolARN":"{{ .Values.ingress.cognito.userPoolArn }}","userPoolClientID":"{{ .Values.ingress.cognito.userPoolClientId }}","userPoolDomain":"{{ .Values.ingress.cognito.userPoolDomain }}"}
-    alb.ingress.kubernetes.io/auth-on-unauthenticated-request: authenticate
 spec:
   ingressClassName: alb
   rules:
-    - http:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
         paths:
           - path: /
             pathType: Prefix

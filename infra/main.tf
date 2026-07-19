@@ -132,3 +132,111 @@ module "rds" {
 
   tags = local.tags
 }
+
+# ---------------- RDS Proxy ----------------
+data "aws_caller_identity" "current" {}
+
+resource "aws_security_group" "rds_proxy" {
+  name        = "${local.name}-rds-proxy"
+  description = "Allow database proxy access from inside the VPC"
+  vpc_id      = module.vpc.vpc_id
+
+  ingress {
+    description = "PostgreSQL proxy access from the VPC"
+    from_port   = 5432
+    to_port     = 5432
+    protocol    = "tcp"
+    cidr_blocks = [local.vpc_cidr]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = local.tags
+}
+
+resource "aws_iam_role" "rds_proxy" {
+  name               = "${local.name}-rds-proxy-role"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "rds.amazonaws.com"
+        }
+      },
+    ]
+  })
+  tags = local.tags
+}
+
+data "aws_iam_policy_document" "rds_proxy_secret_access" {
+  statement {
+    effect = "Allow"
+    actions = [
+      "secretsmanager:GetSecretValue",
+      "secretsmanager:DescribeSecret",
+      "secretsmanager:ListSecretVersionIds",
+    ]
+    resources = [aws_secretsmanager_secret.rds_proxy_credentials.arn]
+  }
+
+  statement {
+    effect = "Allow"
+    actions = [
+      "rds-db:connect",
+    ]
+    resources = ["arn:aws:rds-db:${var.region}:${data.aws_caller_identity.current.account_id}:dbuser:${module.rds.db_instance_resource_id}/${var.db_username}"]
+  }
+}
+
+resource "aws_iam_role_policy" "rds_proxy_secret_access" {
+  name   = "${local.name}-rds-proxy-secret-access"
+  role   = aws_iam_role.rds_proxy.id
+  policy = data.aws_iam_policy_document.rds_proxy_secret_access.json
+}
+
+resource "aws_secretsmanager_secret" "rds_proxy_credentials" {
+  name = "${local.name}-db-proxy-credentials"
+  description = "RDS Proxy credentials for ${local.name}"
+  tags        = local.tags
+}
+
+resource "aws_secretsmanager_secret_version" "rds_proxy_credentials" {
+  secret_id     = aws_secretsmanager_secret.rds_proxy_credentials.id
+  secret_string = jsonencode({
+    username = var.db_username
+    password = var.db_password
+  })
+}
+
+resource "aws_db_proxy" "shopflow_db_proxy" {
+  name                   = "${local.name}-db-proxy"
+  engine_family          = "POSTGRESQL"
+  role_arn               = aws_iam_role.rds_proxy.arn
+  vpc_subnet_ids         = module.vpc.private_subnets
+  vpc_security_group_ids = [aws_security_group.rds_proxy.id]
+  idle_client_timeout    = 1800
+  require_tls            = false
+
+  auth {
+    auth_scheme = "SECRETS"
+    secret_arn  = aws_secretsmanager_secret.rds_proxy_credentials.arn
+    iam_auth    = "DISABLED"
+  }
+
+  tags = local.tags
+}
+
+resource "aws_db_proxy_target" "shopflow_db_proxy_target" {
+  db_proxy_name        = aws_db_proxy.shopflow_db_proxy.name
+  target_group_name    = "default"
+  db_instance_identifier = module.rds.db_instance_identifier
+  depends_on           = [module.rds]
+}

@@ -14,8 +14,8 @@ pipeline {
 
     parameters {
         choice(name: 'SERVICE', choices: ['catalog', 'orders', 'notifications'], description: 'Which service to build')
-        string(name: 'SONAR_HOST', defaultValue: 'http://100.51.104.230:9000', description: 'SonarQube URL reachable from Jenkins executor')
-        string(name: 'NEXUS_URL', defaultValue: 'http://100.51.104.230:8081/repository/maven-releases/', description: 'Nexus repository URL reachable from Jenkins executor')
+        string(name: 'SONAR_HOST', defaultValue: 'http://3.80.146.144:9000', description: 'SonarQube URL reachable from Jenkins executor')
+        string(name: 'NEXUS_URL', defaultValue: 'http://3.80.146.144:8081/repository/maven-releases/', description: 'Nexus repository URL reachable from Jenkins executor')
     }
 
     environment {
@@ -29,8 +29,8 @@ pipeline {
         ECR_REGISTRY = "${ECR_ACCOUNT}.dkr.ecr.${AWS_REGION}.amazonaws.com"
         IMAGE        = "${ECR_REGISTRY}/${IMAGE_REPO}"
 
-        SONAR_HOST   = "${params.SONAR_HOST ?: 'http://100.51.104.230:9000'}"
-        NEXUS_URL    = "${params.NEXUS_URL ?: 'http://100.51.104.230:8081/repository/maven-releases/'}"
+        SONAR_HOST   = "${params.SONAR_HOST ?: 'http://3.80.146.144:9000'}"
+        NEXUS_URL    = "${params.NEXUS_URL ?: 'http://3.80.146.144:8081/repository/maven-releases/'}"
 
         TRIVY_CACHE_DIR = '/var/jenkins_home/.cache/trivy/global'
 
